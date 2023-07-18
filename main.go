@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type User struct {
@@ -36,7 +37,11 @@ var authenticatedUser *User
 var taskStorage []Task
 var categoryStorage []Category
 
+const userStoragePath = "user.txt"
+
 func main() {
+	LoadUserStorageFromFile()
+
 	fmt.Println("Hello to TODO app")
 
 	command := flag.String("command", "no-command", "command to run")
@@ -52,6 +57,54 @@ func main() {
 	}
 
 }
+func LoadUserStorageFromFile() {
+	file, err := os.Open(userStoragePath)
+	if err != nil {
+		fmt.Println("can't open the file", err)
+		return
+	}
+
+	var data = make([]byte, 10240)
+	_, oErr := file.Read(data)
+	if oErr != nil {
+		fmt.Println("can't read from the file", oErr)
+	}
+
+	dataStr := string(data)
+	userSlice := strings.Split(dataStr, "\n")
+	for index, u := range userSlice {
+		if index == len(userSlice)-1 {
+			continue
+		}
+		var user = User{}
+		userFields := strings.Split(u, ",")
+		for _, field := range userFields {
+			values := strings.Split(field, ":")
+			fieldName := strings.ReplaceAll(values[0], " ", "")
+			fieldValue := strings.ReplaceAll(values[1], " ", "")
+			switch fieldName {
+			case "id":
+				id, err := strconv.Atoi(fieldValue)
+				if err != nil {
+					fmt.Println("strconv error", err)
+
+					return
+				}
+				user.ID = id
+			case "name":
+				user.Name = fieldValue
+			case "email":
+				user.Email = fieldValue
+			case "password":
+				user.Password = fieldValue
+			}
+		}
+		fmt.Printf("user:%+v\n", user)
+
+	}
+
+}
+
 func runCommand(command string) {
 	if command != "register-user" && command != "exit" && authenticatedUser == nil {
 		login()
@@ -167,6 +220,22 @@ func registerUser() {
 		Password: password,
 	}
 	userStorage = append(userStorage, u)
+
+	// save user data in user.txt file
+	var file *os.File
+
+	file, err := os.OpenFile(userStoragePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("file does not exist", err)
+
+		return
+	}
+
+	data := fmt.Sprintf("id: %d, name: %s, email: %s, password: %s\n", u.ID, u.Name,
+		u.Email, u.Password)
+	var b = []byte(data)
+	file.Write(b)
+	file.Close()
 
 }
 func listTask() {
