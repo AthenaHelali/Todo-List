@@ -8,6 +8,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
@@ -182,11 +184,12 @@ func registerUser() {
 
 	fmt.Printf("user:%v %v %v %v\n", len(userStorage)+1, email, password, name)
 
+	hashedPassword := hashPassword(password)
 	u := User{
 		ID:       len(userStorage) + 1,
 		Name:     name,
 		Email:    email,
-		Password: password,
+		Password: hashedPassword,
 	}
 	userStorage = append(userStorage, u)
 	writeUserToFile(u)
@@ -214,7 +217,7 @@ func login() {
 	password = scanner.Text()
 
 	for _, user := range userStorage {
-		if user.Email == email && user.Password == password {
+		if (user.Email == email) && bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) == nil {
 			authenticatedUser = &user
 
 			break
@@ -326,5 +329,16 @@ func deserializeUserFromManual(userStr string) (User, error) {
 		}
 	}
 	return user, nil
+
+}
+
+func hashPassword(password string) string {
+	pass := []byte(password)
+
+	hash, err := bcrypt.GenerateFromPassword(pass, bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
+	return string(hash)
 
 }
