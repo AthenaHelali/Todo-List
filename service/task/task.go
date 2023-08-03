@@ -1,34 +1,42 @@
-package service
+package task
 
 import (
 	"fmt"
 	"todo-list/models"
 )
 
-type TaskRepository interface {
-	DoesThisUserHasThisCategoryID(userID, categoryID int) (bool, error)
+type ServiceRepository interface {
+	// CreateNewTask DoesThisUserHasThisCategoryID(userID, categoryID int) (bool, error)
 	CreateNewTask(t models.Task) (models.Task, error)
+	ListUserTask(userID int) ([]models.Task, error)
 }
 
-type Task struct {
-	repository TaskRepository
+type Service struct {
+	repository ServiceRepository
 }
+
+func NewService(rep ServiceRepository) *Service {
+	return &Service{
+		repository: rep,
+	}
+}
+
 type CreateTaskRequest struct {
 	Title               string
 	DueDate             string
 	CategoryID          int
 	AuthenticatedUserID int
 }
-type CreateTaskResponse struct {
+type CreateResponse struct {
 	Task models.Task
 }
 
-func (t Task) CreateTask(req CreateTaskRequest) (CreateTaskResponse, error) {
+func (s Service) CreateTask(req CreateTaskRequest) (CreateResponse, error) {
 
-	if ok, _ := t.repository.DoesThisUserHasThisCategoryID(req.AuthenticatedUserID, req.CategoryID); !ok {
-		return CreateTaskResponse{}, fmt.Errorf("category-id %d is not found", req.CategoryID)
-	}
-	createdTask, cErr := t.repository.CreateNewTask(models.Task{
+	/*if ok, _ := s.repository.DoesThisUserHasThisCategoryID(req.AuthenticatedUserID, req.CategoryID); !ok {
+		return CreateResponse{}, fmt.Errorf("category-id %d is not found", req.CategoryID)
+	}*/
+	createdTask, cErr := s.repository.CreateNewTask(models.Task{
 		Title:      req.Title,
 		DueDate:    req.DueDate,
 		CategoryID: req.CategoryID,
@@ -36,10 +44,25 @@ func (t Task) CreateTask(req CreateTaskRequest) (CreateTaskResponse, error) {
 		UserID:     req.AuthenticatedUserID,
 	})
 	if cErr != nil {
-		return CreateTaskResponse{}, fmt.Errorf("can't create new task: %v", cErr)
+		return CreateResponse{}, fmt.Errorf("can't create new task: %v", cErr)
 	}
 
-	return CreateTaskResponse{createdTask}, nil
+	return CreateResponse{createdTask}, nil
 
 }
-func () 
+
+type ListRequest struct {
+	UserID int
+}
+type ListResponse struct {
+	Tasks []models.Task
+}
+
+func (s Service) ListTask(req ListRequest) (ListResponse, error) {
+	tasks, err := s.repository.ListUserTask(req.UserID)
+	if err != nil {
+		return ListResponse{}, fmt.Errorf("can't list tasks: %v", err)
+	}
+
+	return ListResponse{Tasks: tasks}, nil
+}

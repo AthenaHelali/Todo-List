@@ -4,27 +4,29 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"golang.org/x/crypto/bcrypt"
 	"os"
 	"strconv"
 	"todo-list/constant"
 	"todo-list/contract"
-	"todo-list/filestore"
 	"todo-list/models"
-
-	"golang.org/x/crypto/bcrypt"
+	"todo-list/repository/filestore"
+	"todo-list/repository/memorystore"
+	"todo-list/service/task"
 )
 
 var (
 	authenticatedUser *models.User
 	serializationMode string
 	userStorage       []models.User
-	taskStorage       []models.Task
 	categoryStorage   []models.Category
 )
 
 var userFileStore filestore.FileStorage
 
 func main() {
+	taskMemoryRepo := memorystore.NewTaskStore()
+	taskService := task.NewService(taskMemoryRepo)
 	fmt.Println("Hello to TODO app")
 
 	serializeModeInput := flag.String("serialize-mode", constant.ManualSerializationMode, "serialization mode to write data to file")
@@ -41,7 +43,7 @@ func main() {
 
 	userStorage = append(userStorage, userFileStore.Load()...)
 	for {
-		runCommand(*command)
+		runCommand(*command, taskService)
 
 		scanner := bufio.NewScanner(os.Stdin)
 		fmt.Println("please enter another command")
@@ -51,7 +53,7 @@ func main() {
 
 }
 
-func runCommand(command string) {
+func runCommand(command string, taskService *task.Service) {
 	if command != "register-user" && command != "exit" && authenticatedUser == nil {
 		login()
 
@@ -61,9 +63,9 @@ func runCommand(command string) {
 	}
 	switch command {
 	case "create-task":
-		createTask()
+		createTask(taskService)
 	case "list-task":
-		listTask()
+		listTask(taskService)
 	case "create-category":
 		createCategory()
 	case "register-user":
@@ -77,7 +79,7 @@ func runCommand(command string) {
 
 	}
 }
-func createTask() {
+func createTask(taskService *task.Service) {
 	scanner := bufio.NewScanner(os.Stdin)
 	var title, duedate, category string
 
@@ -94,30 +96,22 @@ func createTask() {
 
 		return
 	}
-	isFound := false
-	for _, c := range categoryStorage {
-		if c.ID == categoryID && c.UserID == authenticatedUser.ID {
-			isFound = true
-			break
-		}
-	}
-	if !isFound {
-		fmt.Printf("category-id is not found\n")
-		return
-	}
-
 	fmt.Println("please enter the task due date")
 	scanner.Scan()
 	duedate = scanner.Text()
-	task := models.Task{
-		ID:         len(taskStorage) + 1,
-		Title:      title,
-		DueDate:    duedate,
-		CategoryID: categoryID,
-		IsDone:     false,
-		UserID:     authenticatedUser.ID,
+
+	response, cErr := taskService.CreateTask(task.CreateTaskRequest{
+		Title:               title,
+		DueDate:             duedate,
+		CategoryID:          categoryID,
+		AuthenticatedUserID: authenticatedUser.ID,
+	})
+	if cErr != nil {
+		fmt.Println("error", err)
+		return
 	}
-	taskStorage = append(taskStorage, task)
+	fmt.Println("created task:", response)
+	return
 
 }
 func createCategory() {
@@ -172,12 +166,14 @@ func registerUser(store contract.UserWriteStore) {
 	store.Save(u)
 
 }
-func listTask() {
-	for _, task := range taskStorage {
-		if task.UserID == authenticatedUser.ID {
-			fmt.Println(task)
-		}
+func listTask(taskService *task.Service) {
+	userTasks, err := taskService.ListTask(task.ListRequest{authenticatedUser.ID})
+	if err != nil {
+		fmt.Println("error", err)
+
+		return
 	}
+	fmt.Println("user tasks", userTasks)
 
 }
 func login() {
